@@ -1,0 +1,12 @@
+# Core runtime (gateway + nodes)
+fastapi>=0.110
+uvicorn[standard]>=0.24
+grpcio>=1.60
+grpcio-tools>=1.60
+protobuf>=4.25
+httpx>=0.27
+pydantic>=2.5
+
+# Tooling (screenshots / presentation) - optional for running the system
+python-pptx>=1.0
+playwright>=1.40
