@@ -1,0 +1,160 @@
+// Distributed Traffic Incident Coordination System - gRPC contract
+//
+// Every regional traffic node (Pune / Mumbai / Nashik) exposes this service.
+// It is used by
+//   * the Coordination Middleware  (coordinator -> node RPC)
+//   * other nodes                  (node -> node, peer-to-peer RPC)
+//
+// Regenerate the Python stubs with:  python tools/gen_proto.py
+
+syntax = "proto3";
+
+package traffic;
+
+service TrafficNode {
+  // ---- Status / monitoring (used by the heartbeat failure detector) ----
+  rpc GetNodeStatus (Empty) returns (NodeStatus);
+  rpc GetTrafficStatus (Empty) returns (TrafficStatus);
+
+  // ---- Incident management (local data ownership) ----
+  rpc ListIncidents (Empty) returns (IncidentList);
+  rpc GetIncidentStatus (IncidentId) returns (Incident);
+  rpc CreateIncident (CreateIncidentRequest) returns (Incident);
+  rpc UpdateIncidentStatus (IncidentStatusUpdate) returns (Incident);
+
+  // Delivery of a broadcast message (INCIDENT_CREATED) from the broker
+  rpc NotifyIncident (Incident) returns (Ack);
+
+  // ---- Response resource coordination ----
+  // Coordinator asks the node to find response units for one of its incidents.
+  // The node searches locally first and then queries its peers directly (P2P).
+  rpc RequestResponseSupport (SupportRequest) returns (SupportResponse);
+
+  // Peer-to-peer procedures (node -> node)
+  rpc SearchResponseUnits (UnitSearchRequest) returns (UnitSearchResponse);
+  rpc ReserveUnit (UnitReservation) returns (Ack);
+  rpc ReleaseUnit (UnitReservation) returns (Ack);
+
+  // ---- Administration (fault-tolerance demonstration) ----
+  // SetAvailability(false) makes the node refuse every other RPC with
+  // status UNAVAILABLE - indistinguishable, for callers, from a crashed node.
+  rpc SetAvailability (AvailabilityRequest) returns (Ack);
+  rpc ResetData (Empty) returns (Ack);
+}
+
+message Empty {}
+
+message Ack {
+  bool ok = 1;
+  string message = 2;
+}
+
+message NodeStatus {
+  string node_id = 1;          // logical identifier, e.g. PUNE-TR-01
+  string node_name = 2;        // human readable name
+  string region = 3;           // city / region served
+  string address = 4;          // network address, e.g. localhost:5001
+  bool available = 5;
+  int32 active_incidents = 6;
+  int32 available_units = 7;
+  int32 total_units = 8;
+  double traffic_density = 9;  // 0-100 (%), average over segments
+  string db_path = 10;
+  double uptime_seconds = 11;
+  repeated ResponseUnit units = 12;
+}
+
+message TrafficSegment {
+  string road = 1;
+  double density = 2;          // 0-100 (%)
+  string updated_at = 3;
+}
+
+message TrafficStatus {
+  string node_id = 1;
+  double average_density = 2;
+  repeated TrafficSegment segments = 3;
+}
+
+message IncidentId {
+  string incident_id = 1;
+}
+
+message AssignedUnit {
+  string unit_id = 1;
+  string node_id = 2;          // node that owns the unit
+}
+
+message Incident {
+  string incident_id = 1;      // globally unique identifier, e.g. INC-1004
+  string type = 2;             // Accident / Road Blockage / ...
+  string location = 3;
+  string severity = 4;         // High / Medium / Low
+  string description = 5;
+  string detected_by = 6;      // node id that reported the incident
+  string handled_by = 7;       // node id that owns the record (differs after failover)
+  string status = 8;           // REPORTED / UNITS_ASSIGNED / PARTIALLY_ASSIGNED / RESOLVED / MONITORING
+  repeated AssignedUnit assigned_units = 9;
+  string created_at = 10;
+  string updated_at = 11;
+  string origin = 12;          // LOCAL (owned) or REMOTE (copy received via broadcast)
+}
+
+message IncidentList {
+  repeated Incident incidents = 1;
+}
+
+message CreateIncidentRequest {
+  string incident_id = 1;      // allocated by the coordinator
+  string type = 2;
+  string location = 3;
+  string severity = 4;
+  string description = 5;
+  string detected_by = 6;
+}
+
+message IncidentStatusUpdate {
+  string incident_id = 1;
+  string status = 2;
+}
+
+message ResponseUnit {
+  string unit_id = 1;          // e.g. PT-01
+  string node_id = 2;
+  string unit_type = 3;        // Patrol / Ambulance / Tow / Signal Crew
+  string status = 4;           // AVAILABLE / DISPATCHED
+  string assigned_incident = 5;
+}
+
+message UnitSearchRequest {
+  string requesting_node = 1;
+  string incident_id = 2;
+  string severity = 3;
+  int32 units_needed = 4;
+}
+
+message UnitSearchResponse {
+  string node_id = 1;
+  repeated ResponseUnit units = 2;
+}
+
+message UnitReservation {
+  string requesting_node = 1;
+  string incident_id = 2;
+  string unit_id = 3;
+}
+
+message SupportRequest {
+  string incident_id = 1;
+}
+
+message SupportResponse {
+  Incident incident = 1;
+  int32 units_needed = 2;
+  int32 units_assigned = 3;
+  repeated string trace = 4;   // human readable steps (local search, P2P calls)
+}
+
+message AvailabilityRequest {
+  bool available = 1;
+}
