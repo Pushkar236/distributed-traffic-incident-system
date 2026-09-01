@@ -1,0 +1,15 @@
+# Regional traffic node container (one container per region)
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" grpcio grpcio-tools protobuf httpx pydantic
+
+COPY backend ./backend
+COPY proto ./proto
+
+# NODE_ID and GRPC_PORT are provided by docker-compose
+ENV DATA_DIR=/data
+VOLUME ["/data"]
+
+CMD ["python", "-m", "backend.node"]

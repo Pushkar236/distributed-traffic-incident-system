@@ -1,0 +1,13 @@
+# API gateway + coordination middleware + broker + WebSocket hub + dashboard
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" grpcio grpcio-tools protobuf httpx pydantic
+
+COPY backend ./backend
+COPY proto ./proto
+COPY frontend ./frontend
+
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

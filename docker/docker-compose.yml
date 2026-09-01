@@ -1,0 +1,58 @@
+# Each regional node runs in its own container with its own database volume.
+#   cd docker
+#   docker compose up --build
+# Dashboard: http://localhost:8000
+#
+# Failure demo with real containers:  docker compose stop pune-node
+# Recovery:                            docker compose start pune-node
+
+services:
+  pune-node:
+    build: { context: .., dockerfile: docker/Dockerfile.node }
+    environment:
+      NODE_ID: PUNE-TR-01
+      GRPC_PORT: "5001"
+      BROKER_URL: http://gateway:8000/internal/events
+      NODE_ADDR_PUNE_TR_01: pune-node:5001
+      NODE_ADDR_MUM_TR_01: mumbai-node:5002
+      NODE_ADDR_NSK_TR_01: nashik-node:5003
+    volumes: [ "pune-data:/data" ]
+    ports: [ "5001:5001" ]
+
+  mumbai-node:
+    build: { context: .., dockerfile: docker/Dockerfile.node }
+    environment:
+      NODE_ID: MUM-TR-01
+      GRPC_PORT: "5002"
+      BROKER_URL: http://gateway:8000/internal/events
+      NODE_ADDR_PUNE_TR_01: pune-node:5001
+      NODE_ADDR_MUM_TR_01: mumbai-node:5002
+      NODE_ADDR_NSK_TR_01: nashik-node:5003
+    volumes: [ "mumbai-data:/data" ]
+    ports: [ "5002:5002" ]
+
+  nashik-node:
+    build: { context: .., dockerfile: docker/Dockerfile.node }
+    environment:
+      NODE_ID: NSK-TR-01
+      GRPC_PORT: "5003"
+      BROKER_URL: http://gateway:8000/internal/events
+      NODE_ADDR_PUNE_TR_01: pune-node:5001
+      NODE_ADDR_MUM_TR_01: mumbai-node:5002
+      NODE_ADDR_NSK_TR_01: nashik-node:5003
+    volumes: [ "nashik-data:/data" ]
+    ports: [ "5003:5003" ]
+
+  gateway:
+    build: { context: .., dockerfile: docker/Dockerfile.gateway }
+    environment:
+      NODE_ADDR_PUNE_TR_01: pune-node:5001
+      NODE_ADDR_MUM_TR_01: mumbai-node:5002
+      NODE_ADDR_NSK_TR_01: nashik-node:5003
+    ports: [ "8000:8000" ]
+    depends_on: [ pune-node, mumbai-node, nashik-node ]
+
+volumes:
+  pune-data:
+  mumbai-data:
+  nashik-data:
