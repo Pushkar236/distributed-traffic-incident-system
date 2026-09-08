@@ -30,7 +30,8 @@ def main():
         processes.append(subprocess.Popen([sys.executable, "-m", "backend.node", "--node-id", node_id]))
     time.sleep(1.5)                                                  # let them bind their ports
     processes.append(subprocess.Popen([sys.executable, "-m", "uvicorn", "backend.main:app",
-                                       "--port", str(config.GATEWAY_PORT), "--log-level", "warning"]))
+                                       "--host", "0.0.0.0", "--port", str(config.GATEWAY_PORT),
+                                       "--log-level", "warning"]))
 
     print("\n=== Distributed Traffic Incident Coordination System ===")
     for node_id, info in config.NODES.items():

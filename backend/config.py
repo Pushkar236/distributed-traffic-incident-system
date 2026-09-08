@@ -12,7 +12,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT_DIR / "data"))
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
-GATEWAY_PORT = int(os.environ.get("GATEWAY_PORT", "8000"))
+# PORT is set by cloud hosts (Render); GATEWAY_PORT works locally; default 8000
+GATEWAY_PORT = int(os.environ.get("PORT", os.environ.get("GATEWAY_PORT", "8000")))
 # URL that node processes use to publish messages to the broker (lives in the gateway)
 BROKER_URL = os.environ.get("BROKER_URL", f"http://localhost:{GATEWAY_PORT}/internal/events")
 

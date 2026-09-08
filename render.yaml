@@ -1,0 +1,10 @@
+# Render blueprint: deploys the whole system as one free Docker web service.
+# All four processes (3 gRPC nodes + gateway) run inside the container;
+# Render routes HTTPS/WSS traffic to the gateway on $PORT.
+services:
+  - type: web
+    name: distributed-traffic-incident-system
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/system
+    autoDeploy: true
