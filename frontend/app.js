@@ -39,7 +39,8 @@ async function api(method, url, body) {
 
 /* ------------------------------------------------------------- 1. WebSocket */
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  const scheme = location.protocol === "https:" ? "wss" : "ws";   // wss when deployed behind HTTPS
+  ws = new WebSocket(`${scheme}://${location.host}/ws`);
   ws.onopen = () => { $("#ws-status").className = "pill ok"; $("#ws-status").innerHTML = '<i class="dot"></i> LIVE · WebSocket stream'; };
   ws.onclose = () => { $("#ws-status").className = "pill bad"; $("#ws-status").innerHTML = '<i class="dot"></i> disconnected · retrying'; setTimeout(connect, 1500); };
   ws.onmessage = (e) => {
@@ -224,7 +225,9 @@ function rtcLog(cls, text) {
 function rtcState(text, ok) { $("#rtc-state").className = "pill" + (ok ? " ok" : ""); $("#rtc-state").innerHTML = `<i class="dot"></i> ${text}`; }
 
 function createPeer() {
-  pc = new RTCPeerConnection({ iceServers: [] });           // same machine / LAN: no STUN needed
+  // STUN lets two different devices find each other through the deployed site;
+  // two tabs on one machine work even without it
+  pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
   pc.onicecandidate = (e) => e.candidate && sendSignal({ type: "ice", candidate: e.candidate });
   pc.oniceconnectionstatechange = () => { $("#rtc-ice").textContent = "ice: " + pc.iceConnectionState; };
   pc.ontrack = (e) => { $("#remote-video").srcObject = e.streams[0]; rtcLog("sys", "remote media track received"); };
