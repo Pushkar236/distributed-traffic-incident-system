@@ -1,0 +1,21 @@
+# Keeps the free Render instance awake by pinging it every 10 minutes
+# (Render spins a free service down after ~15 minutes without traffic).
+# Render's free plan includes 750 instance-hours/month - enough to run
+# one service 24/7, so keeping it warm costs nothing.
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}   # allows manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the live service
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+            https://distributed-traffic-incident-system.onrender.com/api/system)
+          echo "HTTP $code"
+          test "$code" = "200"
