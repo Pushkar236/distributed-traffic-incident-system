@@ -2,6 +2,10 @@
 
 **Distributed Systems — Formative Assessment 1 mini-project**
 
+**Live demo:** https://distributed-traffic-incident-system.onrender.com — hosted on Render's free tier,
+so the first visit after idle takes ~30–60 s to wake up. All four processes (3 gRPC nodes + gateway) run
+inside one container; databases reset to fresh demo data on each restart (use *Reset demo data* any time).
+
 An educational distributed system in which three independent regional traffic-control nodes
 (**Pune**, **Mumbai**, **Nashik**) detect, share and respond to traffic incidents. Every major feature
 maps to a Unit 1 / Unit 2 concept: RPC (gRPC), message-oriented communication (publish/subscribe
