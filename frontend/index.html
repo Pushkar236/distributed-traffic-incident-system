@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Distributed Traffic Incident Coordination System</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/fa2.css">
 </head>
 <body>
 <header class="topbar">
@@ -18,6 +19,7 @@
   <div class="topbar-right">
     <span class="pill" id="ws-status"><i class="dot"></i> connecting…</span>
     <span class="pill mono" id="clock">--:--:--</span>
+    <a class="btn btn-ghost fa2-jump" href="#fa2" title="FA-2: synchronization and emerging paradigms">FA-2 ↓</a>
     <button class="btn btn-ghost" id="btn-reset" title="Reload the fictional demo data on every node">Reset demo data</button>
   </div>
 </header>
@@ -165,6 +167,7 @@
         <button class="chip" data-filter="P2P">P2P</button>
         <button class="chip" data-filter="BROKER">Messages</button>
         <button class="chip" data-filter="SYSTEM">System</button>
+        <button class="chip" data-filter="FA2">FA-2</button>
       </div>
     </div>
     <div class="log" id="log"></div>
@@ -245,6 +248,369 @@
 
 </main>
 
+<!-- =============================================================================
+     FA-2 EXTENSION - Unit III (Synchronization) and Unit IV (Emerging Paradigms)
+     Everything below is driven by /api/fa2/* (frontend/fa2.js, frontend/fa2.css).
+     ============================================================================= -->
+<section class="fa2-banner" id="fa2">
+  <div>
+    <h2>FA-2 · Unit III — Synchronization</h2>
+    <p>Algorithms run inside the three node processes and exchange their own messages over the
+       <code>SyncNode</code> gRPC service (FIFO channels, Lamport + vector clocks on every message).
+       The dashboard only triggers them and shows their real state.</p>
+  </div>
+  <span class="pill" id="fa2-leader-pill"><i class="dot"></i> leader: —</span>
+</section>
+
+<main class="layout fa2-layout">
+
+  <!-- ============================ FA-2 NODE STATE =========================== -->
+  <section class="panel wide" id="fa2-panel-nodes">
+    <div class="panel-head">
+      <h2>FA-2 Node State</h2>
+      <span class="hint">Live from <code>GET /api/fa2/state</code> · refreshed every 2 s</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="fa2-node-table">
+        <thead><tr>
+          <th>Node</th><th>Leader (its view)</th><th>Lamport</th><th>Vector clock [P, M, N]</th>
+          <th>Physical clock</th><th>Offset vs reference</th><th>Beacons from peers</th>
+          <th>Mutex</th><th>Ledger</th><th>FA-2 msgs sent</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================ CLOCK SYNC ================================ -->
+  <section class="panel" id="fa2-panel-clock">
+    <div class="panel-head">
+      <h2>Clock Synchronization</h2>
+      <span class="hint">Simulated skew + drift per node; reference = gateway clock</span>
+    </div>
+    <div class="fa2-actions">
+      <button class="btn btn-primary" data-fa2="cristian">Cristian (all nodes)</button>
+      <button class="btn btn-primary" data-fa2="berkeley">Berkeley (leader = daemon)</button>
+      <button class="btn btn-ghost" data-fa2="reskew">Re-skew clocks</button>
+    </div>
+    <div id="fa2-clock-bars" class="fa2-offsets"></div>
+    <div class="trace">
+      <div class="trace-head">Last synchronization round</div>
+      <div id="fa2-clock-result" class="fa2-mono muted">No synchronization yet.</div>
+    </div>
+  </section>
+
+  <!-- ============================ BEACONS =================================== -->
+  <section class="panel" id="fa2-panel-beacon">
+    <div class="panel-head">
+      <h2>Beacon Protocol</h2>
+      <span class="hint">Beacon every <span id="fa2-beacon-int">1</span>s · suspect after <span id="fa2-beacon-to">3.5</span>s</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="fa2-beacon-table">
+        <thead><tr><th>Observer</th><th>Peer</th><th>Status</th><th>Last beacon</th>
+          <th>Received</th><th>Offset est. (sender→recv)</th><th>Offset est. (RBS)</th><th>True offset</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="fa2-note">Beacons give decentralised liveness monitoring (a suspected leader triggers a Bully election)
+      and clock-offset estimates. RBS compares two receivers' arrival times of the <i>same</i> beacon, so the
+      sender's clock and send delay cancel out. Try <b>Fail Mumbai Node</b> above and watch the status change.</p>
+  </section>
+
+  <!-- ===================== LOGICAL CLOCKS / CAUSAL ORDER ===================== -->
+  <section class="panel wide" id="fa2-panel-logical">
+    <div class="panel-head">
+      <h2>Logical Clocks — Lamport &amp; Vector · Causal Ordering</h2>
+      <span class="hint">Merged event logs of all nodes, ordered by (Lamport, node)</span>
+    </div>
+    <div class="fa2-grid-2">
+      <div>
+        <div class="fa2-stats" id="fa2-clock-check"></div>
+        <div class="table-wrap fa2-scroll">
+          <table class="table fa2-small" id="fa2-event-table">
+            <thead><tr><th>Event</th><th>L</th><th>Vector</th><th>Node</th><th>Type</th><th>Message</th><th>Peer</th><th>Physical (node clock)</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <form class="fa2-inline" id="fa2-compare-form">
+          <label>Event A <input id="fa2-cmp-a" placeholder="PUNE-TR-01:12"></label>
+          <label>Event B <input id="fa2-cmp-b" placeholder="NSK-TR-01:30"></label>
+          <button class="btn btn-ghost" type="submit">Compare (happened-before?)</button>
+          <span id="fa2-cmp-result" class="fa2-mono"></span>
+        </form>
+      </div>
+      <div>
+        <div class="fa2-actions">
+          <button class="btn btn-primary" data-fa2="causal">Run causal-order demo</button>
+        </div>
+        <p class="fa2-note">Pune broadcasts an alert while its link to Nashik is slowed by 3 s. Mumbai delivers it and
+          broadcasts an acknowledgement (causally <i>after</i> the alert). Nashik receives the acknowledgement first and
+          must <b>buffer</b> it until the alert arrives (Birman–Schiper–Stephenson, vector timestamps).
+          Every FA-1 incident create/update is causally broadcast the same way.</p>
+        <div class="fa2-two">
+          <div><div class="trace-head">Nashik — receive order</div><ol id="fa2-causal-recv" class="fa2-list"></ol></div>
+          <div><div class="trace-head">Nashik — delivery order</div><ol id="fa2-causal-deliv" class="fa2-list"></ol></div>
+        </div>
+        <div class="trace-head">Buffered now</div>
+        <div id="fa2-causal-buffer" class="fa2-mono muted">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ELECTION ================================== -->
+  <section class="panel" id="fa2-panel-election">
+    <div class="panel-head">
+      <h2>Leader Election</h2>
+      <span class="hint">Bully priority Pune 1 &lt; Mumbai 2 &lt; Nashik 3 · Ring Pune→Mumbai→Nashik→Pune</span>
+    </div>
+    <div class="fa2-actions">
+      <label class="fa2-label">Initiator
+        <select id="fa2-elect-init">
+          <option value="PUNE-TR-01">Pune</option><option value="MUM-TR-01">Mumbai</option><option value="NSK-TR-01">Nashik</option>
+        </select></label>
+      <button class="btn btn-primary" data-fa2="bully">Start Bully</button>
+      <button class="btn btn-primary" data-fa2="ring">Start Ring</button>
+    </div>
+    <div id="fa2-elect-summary" class="fa2-stats"></div>
+    <ol id="fa2-elect-trace" class="fa2-list fa2-scroll"><li class="muted">No election triggered from the dashboard yet
+      (an automatic Bully election runs at start-up and whenever beacons stop from the leader).</li></ol>
+  </section>
+
+  <!-- ============================ SNAPSHOT ================================== -->
+  <section class="panel" id="fa2-panel-snapshot">
+    <div class="panel-head">
+      <h2>Global State — Chandy–Lamport</h2>
+      <span class="hint">Invariant: 30 patrol vehicles in total</span>
+    </div>
+    <div class="fa2-actions">
+      <button class="btn btn-primary" data-fa2="snapshot">Take snapshot (with transfer traffic)</button>
+    </div>
+    <p class="fa2-note">While transfer traffic runs, regions lend patrol vehicles to each other (0.2–1.2 s in transit).
+      Reading the three counters naively misses vehicles on the road; the snapshot records local states <b>and</b>
+      channel states, so the total is exactly 30.</p>
+    <div id="fa2-snap-result" class="fa2-mono muted">No snapshot yet.</div>
+  </section>
+
+  <!-- ========================= MUTUAL EXCLUSION ============================= -->
+  <section class="panel wide" id="fa2-panel-mutex">
+    <div class="panel-head">
+      <h2>Distributed Mutual Exclusion — shared air-ambulance register</h2>
+      <span class="hint">CS = read-modify-write of <code>/shared/air-ambulance-register.log</code> in the FA-2 DFS</span>
+    </div>
+    <div class="fa2-grid-2">
+      <div>
+        <div class="fa2-actions">
+          <label class="fa2-label">Algorithm
+            <select id="fa2-me-algo">
+              <option value="LODHA_KSHEMKALYANI">Lodha–Kshemkalyani (fair, N-1 … 2(N-1))</option>
+              <option value="RICART_AGRAWALA">Ricart–Agrawala (2(N-1))</option>
+              <option value="LAMPORT">Lamport (3(N-1))</option>
+              <option value="NONE">NONE — no coordination (unsafe)</option>
+            </select></label>
+          <button class="btn btn-primary" data-fa2="mutex">All 3 nodes request concurrently</button>
+        </div>
+        <div id="fa2-me-summary" class="fa2-stats"></div>
+        <div id="fa2-me-timeline" class="fa2-timeline"></div>
+        <div class="trace-head">Register file after the run (one line per CS execution)</div>
+        <pre id="fa2-me-register" class="fa2-pre">—</pre>
+      </div>
+      <div>
+        <div class="trace-head">Runs this session (compare message counts)</div>
+        <table class="table fa2-small" id="fa2-me-history">
+          <thead><tr><th>Algorithm</th><th>CS</th><th>Messages</th><th>Per CS</th><th>Overlaps</th><th>Lost updates</th><th>Fair order</th></tr></thead>
+          <tbody><tr><td colspan="7" class="muted">Run each algorithm once to compare.</td></tr></tbody>
+        </table>
+        <div class="trace-head" style="margin-top:12px">Per-node algorithm state</div>
+        <pre id="fa2-me-state" class="fa2-pre fa2-scroll">—</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ DEADLOCK ================================== -->
+  <section class="panel wide" id="fa2-panel-deadlock">
+    <div class="panel-head">
+      <h2>Distributed Deadlock Detection (Knapp's classes)</h2>
+      <span class="hint">FA-2 lock manager on response units — FA-1 dispatch status is not changed</span>
+    </div>
+    <div class="fa2-grid-2">
+      <div>
+        <div class="fa2-actions">
+          <button class="btn btn-danger" data-fa2="dl-setup">Create circular wait</button>
+          <label class="fa2-label">Probe initiator
+            <select id="fa2-dl-init">
+              <option value="MUM-TR-01">Mumbai</option><option value="PUNE-TR-01">Pune</option><option value="NSK-TR-01">Nashik</option>
+            </select></label>
+          <button class="btn btn-primary" data-fa2="dl-edge">Detect: edge-chasing</button>
+          <button class="btn btn-primary" data-fa2="dl-global">Detect: global state</button>
+          <button class="btn btn-success" data-fa2="dl-resolve">Resolve (abort victim)</button>
+          <button class="btn btn-ghost" data-fa2="dl-reset">Reset locks</button>
+        </div>
+        <div id="fa2-dl-result" class="fa2-mono muted">No lock activity yet.</div>
+        <ol id="fa2-dl-trace" class="fa2-list fa2-scroll"></ol>
+      </div>
+      <div>
+        <svg id="fa2-wfg" viewBox="0 0 360 220" role="img" aria-label="Wait-for graph">
+          <defs><marker id="fa2-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#d13b32"></path></marker></defs>
+          <g id="fa2-wfg-edges"></g>
+          <g class="dnode" transform="translate(70,170)"><circle r="30"></circle><text class="dn-title" y="4">PUNE</text></g>
+          <g class="dnode" transform="translate(180,50)"><circle r="30"></circle><text class="dn-title" y="4">MUMBAI</text></g>
+          <g class="dnode" transform="translate(290,170)"><circle r="30"></circle><text class="dn-title" y="4">NASHIK</text></g>
+        </svg>
+        <p class="fa2-note">Wait-for graph built from the nodes' real lock state (red edge = waits for).
+          <b>Edge-chasing</b> (Chandy–Misra–Haas): a blocked node sends a probe along the edges; if it comes back,
+          there is a cycle. <b>Global state</b>: a Chandy–Lamport snapshot records every node's wait-for edges at a
+          consistent cut, and the cycle is searched in that graph.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="fa2-banner" id="fa2-unit4">
+  <div>
+    <h2>FA-2 · Unit IV — Emerging Distributed Paradigms</h2>
+    <p>Distributed objects, a replicated file system, serverless functions, an audit ledger and web caching —
+       built into the same three nodes and gateway.</p>
+  </div>
+</section>
+
+<main class="layout fa2-layout">
+
+  <!-- ========================== DISTRIBUTED OBJECTS ========================= -->
+  <section class="panel" id="fa2-panel-objects">
+    <div class="panel-head">
+      <h2>Distributed Objects (RMI-style)</h2>
+      <span class="hint">proxy → <code>Invoke</code> RPC → skeleton → servant on the hosting node</span>
+    </div>
+    <form class="fa2-form" id="fa2-obj-form">
+      <label>Object (naming service)<select id="fa2-obj-ref"></select></label>
+      <label>Remote method<select id="fa2-obj-method"></select></label>
+      <label class="span2">Arguments (JSON)<input id="fa2-obj-args" value="{}"></label>
+      <div class="span2 fa2-actions">
+        <button class="btn btn-primary" type="submit">Invoke remotely</button>
+        <span class="hint">Tip: <code>sync_with</code> takes another object's reference — the hosting node calls it itself.</span>
+      </div>
+    </form>
+    <pre id="fa2-obj-result" class="fa2-pre">—</pre>
+  </section>
+
+  <!-- ========================= DISTRIBUTED FILE SYSTEM ====================== -->
+  <section class="panel" id="fa2-panel-dfs">
+    <div class="panel-head">
+      <h2>Distributed File System</h2>
+      <span class="hint"><span id="fa2-dfs-cfg">256 B chunks × 2 replicas</span> · master in gateway, chunks on nodes</span>
+    </div>
+    <div class="table-wrap fa2-scroll-sm">
+      <table class="table fa2-small" id="fa2-dfs-table">
+        <thead><tr><th>Path</th><th>Size</th><th>v</th><th>Chunks → replicas</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="fa2-actions">
+      <select id="fa2-dfs-incident"></select>
+      <button class="btn btn-primary" data-fa2="dfs-report">Generate report (FaaS → DFS)</button>
+      <button class="btn btn-ghost" data-fa2="dfs-repair">Repair / re-replicate</button>
+    </div>
+    <form class="fa2-inline" id="fa2-dfs-form">
+      <input id="fa2-dfs-path" value="/notes/shift-handover.txt">
+      <input id="fa2-dfs-content" value="Night shift: Katraj bypass lane 2 still closed; MT-03 on standby.">
+      <button class="btn btn-ghost" type="submit">Write file</button>
+    </form>
+    <div id="fa2-dfs-read" class="fa2-mono muted">Click <b>read</b> on a file to see which replica served each chunk.</div>
+  </section>
+
+  <!-- ============================ SERVERLESS ================================ -->
+  <section class="panel" id="fa2-panel-faas">
+    <div class="panel-head">
+      <h2>Serverless Functions (local FaaS)</h2>
+      <span class="hint">each instance = separate process · keep-warm <span id="fa2-faas-warm">60</span>s then scale to zero</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table fa2-small" id="fa2-faas-table">
+        <thead><tr><th>Function</th><th>Trigger</th><th>Calls</th><th>Cold</th><th>Avg ms</th><th>Warm instances (PID)</th><th>GB-s</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="trace-head">Recent invocations</div>
+    <ol id="fa2-faas-recent" class="fa2-list fa2-scroll-sm"></ol>
+  </section>
+
+  <!-- ============================== LEDGER ================================== -->
+  <section class="panel" id="fa2-panel-ledger">
+    <div class="panel-head">
+      <h2>Audit Ledger (Blockchain / DLT)</h2>
+      <span class="hint">hash-chained · toy proof-of-work · leader proposes, majority commits</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table fa2-small" id="fa2-ledger-replicas">
+        <thead><tr><th>Replica</th><th>Height</th><th>Tip hash</th><th>Chain check</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="fa2-actions">
+      <button class="btn btn-ghost" data-fa2="ledger-note">Record note</button>
+      <button class="btn btn-ghost" data-fa2="ledger-verify">Verify all replicas</button>
+      <button class="btn btn-danger" data-fa2="ledger-tamper">Tamper Nashik block #1</button>
+      <button class="btn btn-success" data-fa2="ledger-repair">Repair Nashik</button>
+    </div>
+    <div class="fa2-stats" id="fa2-ledger-summary"></div>
+    <div class="table-wrap fa2-scroll-sm">
+      <table class="table fa2-small" id="fa2-ledger-blocks">
+        <thead><tr><th>#</th><th>Proposer</th><th>Hash</th><th>Nonce</th><th>Events</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================ WEB CACHING =============================== -->
+  <section class="panel" id="fa2-panel-web">
+    <div class="panel-head">
+      <h2>Distributed Web-Based System — HTTP caching</h2>
+      <span class="hint"><code>GET /api/fa2/web/feed</code> · ETag + Cache-Control</span>
+    </div>
+    <div class="fa2-actions">
+      <button class="btn btn-primary" data-fa2="web-get">GET feed (no validator)</button>
+      <button class="btn btn-primary" data-fa2="web-reval">Revalidate (If-None-Match)</button>
+    </div>
+    <div id="fa2-web-result" class="fa2-mono muted">—</div>
+    <div class="fa2-stats" id="fa2-web-stats"></div>
+    <p class="fa2-note">This dashboard is itself a distributed web-based system: browser ↔ HTTP/REST + WebSocket ↔
+      gateway (web/app server) ↔ gRPC ↔ node back-ends. Validators let caches, proxies and CDN edges (see the
+      Cloudflare case study) reuse a copy and receive <b>304 Not Modified</b> with no body.</p>
+  </section>
+
+  <!-- =========================== CASE STUDIES =============================== -->
+  <section class="panel wide" id="fa2-panel-cases">
+    <div class="panel-head">
+      <h2>Industry Case Studies — and where the same idea appears in this project</h2>
+      <span class="hint">Documentation only; no cloud infrastructure is used · details in docs/FA2_IMPLEMENTATION.md</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table fa2-cases">
+        <thead><tr><th>System</th><th>What it is</th><th>Distributed-systems ideas</th><th>Counterpart in this project</th></tr></thead>
+        <tbody>
+          <tr><td class="name">Megaport</td><td>Network-as-a-Service: software-defined private interconnection between data centres and clouds</td>
+            <td>Virtual Cross Connects over a private backbone, on-demand bandwidth via API/portal, Megaport Cloud Router for cloud-to-cloud routing</td>
+            <td>The node↔node P2P links are a private "regional interconnect"; peers and addresses come from a registry (<code>config.NODES</code>)</td></tr>
+          <tr><td class="name">Cloudflare</td><td>Global anycast edge network: CDN, DNS, DDoS protection, Workers</td>
+            <td>Anycast routing to the nearest edge, HTTP caching at the edge, serverless Workers (V8 isolates), Durable Objects for coordinated state</td>
+            <td>ETag/304 web caching demo; local FaaS platform; remote objects with a single host per object</td></tr>
+          <tr><td class="name">AWS</td><td>Public cloud with Regions and Availability Zones</td>
+            <td>Replication across AZs, S3 object storage, the Dynamo paper (2007: consistent hashing, sloppy quorums, vector clocks) that influenced DynamoDB, Lambda serverless</td>
+            <td>Vector clocks, majority-commit ledger, replicated DFS chunks, Lambda-style metering in the FaaS runtime</td></tr>
+          <tr><td class="name">Apache Hadoop</td><td>Batch storage and processing on commodity clusters</td>
+            <td>HDFS NameNode (metadata) + DataNodes (blocks, default 3 replicas, checksums), MapReduce/YARN move computation to data</td>
+            <td>DFS master in the gateway = NameNode; nodes = DataNodes; chunk checksums, re-replication after failure</td></tr>
+          <tr><td class="name">Kubernetes</td><td>Container orchestration</td>
+            <td>Control plane with etcd (Raft consensus), controllers reconcile desired vs. actual state, leader election for controllers, Services hide pod addresses</td>
+            <td>Leader election (Bully/Ring), Docker images from FA-1, names vs addresses, heartbeat/beacon health checks</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
 <footer class="footer">
   <span><b>RPC</b> gRPC (proto contract)</span>
   <span><b>Messages</b> publish/subscribe broker</span>
@@ -253,9 +619,11 @@
   <span><b>WebRTC</b> browser data channel + media</span>
   <span><b>Storage</b> one SQLite file per node</span>
   <span><b>Names</b> node id ≠ address</span>
+  <span><b>FA-2</b> clocks · election · mutex · snapshot · DFS · FaaS · ledger</span>
 </footer>
 
 <div class="toast" id="toast" hidden></div>
 <script src="/static/app.js"></script>
+<script src="/static/fa2.js"></script>
 </body>
 </html>
