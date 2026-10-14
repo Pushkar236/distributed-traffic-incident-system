@@ -16,3 +16,7 @@ Thumbs.db
 
 # PowerPoint lock files
 ~$*.pptx
+
+# FA-2 runtime data (DFS chunks + DFS master metadata; ledgers are data/*_ledger.db)
+data/dfs/
+data/fa2_dfs_master.json

@@ -26,6 +26,7 @@ from .rpc import traffic_pb2 as pb
 from .rpc import traffic_pb2_grpc
 from .services.incident_service import IncidentService, incident_to_pb, unit_to_pb
 from .services.matching_service import MatchingService
+from .fa2.runtime import attach as attach_fa2
 
 log = logging.getLogger("node")
 
@@ -41,6 +42,7 @@ class TrafficNodeServicer(traffic_pb2_grpc.TrafficNodeServicer):
         self.incidents = IncidentService(self.db, node_id)
         self.matching = MatchingService(self.db, node_id, self.peers, self.publisher)
         self.available = True          # False = simulated failure
+        self.fa2 = None                # FA-2 synchronization runtime (attached in serve())
 
     async def _check_up(self, context):
         """Called first in every RPC: a 'failed' node refuses to answer."""
@@ -85,6 +87,8 @@ class TrafficNodeServicer(traffic_pb2_grpc.TrafficNodeServicer):
         await self.publisher.publish("INCIDENT_CREATED", target="ALL",
                                      summary=f"{inc['type']} #{inc['incident_id']} recorded locally in {self.info['db']}",
                                      payload={"incident": inc})
+        if self.fa2:
+            self.fa2.incident_event("INCIDENT_CREATED", inc)       # FA-2: logical timestamp + causal broadcast
         return incident_to_pb(inc)
 
     async def UpdateIncidentStatus(self, request, context):
@@ -100,6 +104,8 @@ class TrafficNodeServicer(traffic_pb2_grpc.TrafficNodeServicer):
                                      summary=f"{inc['incident_id']} -> {inc['status']}"
                                              + (f", released {', '.join(released)}" if released else ""),
                                      payload={"incident_id": inc["incident_id"], "status": inc["status"]})
+        if self.fa2:
+            self.fa2.incident_event("INCIDENT_UPDATED", inc)       # FA-2: logical timestamp + causal broadcast
         return incident_to_pb(inc)
 
     async def NotifyIncident(self, request, context):
@@ -163,6 +169,7 @@ async def serve(node_id):
     node = TrafficNodeServicer(node_id)
     server = aio.server()
     traffic_pb2_grpc.add_TrafficNodeServicer_to_server(node, server)
+    node.fa2 = attach_fa2(node, server)        # FA-2: SyncNode service on the same port
     server.add_insecure_port(f"0.0.0.0:{config.NODES[node_id]['port']}")
     await server.start()
     log.info("%s listening on %s | db=%s | peers=%s", node_id, config.address(node_id),

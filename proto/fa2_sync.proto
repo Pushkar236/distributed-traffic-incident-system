@@ -1,0 +1,81 @@
+// FA-2 contract: synchronization + Unit IV services between the regional nodes.
+//
+// This is a SECOND gRPC service registered on the same node port as the FA-1
+// TrafficNode service (proto/traffic.proto is left unchanged).
+//
+//   Deliver     asynchronous message passing node -> node. Every Unit III algorithm
+//               (election, mutual exclusion, snapshot, causal broadcast, deadlock
+//               probes, ledger replication) is a set of SyncMessage kinds.
+//   GetTime     read the node's (skewed) physical clock - Berkeley polling
+//   Command     gateway -> node control (start election, request CS, ...)
+//   Invoke      remote method invocation on a node-hosted object (distributed objects)
+//   StoreChunk / ReadChunk   chunk server of the distributed file system
+//
+// Regenerate the Python stubs with:  python tools/gen_fa2_proto.py
+
+syntax = "proto3";
+
+package fa2;
+
+service SyncNode {
+  rpc Deliver (SyncMessage) returns (Ack);
+  rpc GetTime (TimeRequest) returns (TimeReply);
+  rpc Command (CommandRequest) returns (JsonReply);
+  rpc Invoke (Invocation) returns (InvocationResult);
+  rpc StoreChunk (Chunk) returns (Ack);
+  rpc ReadChunk (ChunkRef) returns (Chunk);
+}
+
+message Ack {
+  bool ok = 1;
+  string message = 2;
+}
+
+// One algorithm message. Logical clocks are piggybacked on every message.
+message SyncMessage {
+  string kind = 1;                  // ELECTION, ME_REQUEST, MARKER, PROBE, ...
+  string sender = 2;
+  string receiver = 3;
+  int64 lamport = 4;                // sender's Lamport clock at the send event
+  map<string, int64> vector = 5;    // sender's vector clock at the send event
+  string payload = 6;               // algorithm-specific fields (JSON)
+  int64 msg_id = 7;                 // unique per sender, used to match send/receive events
+  double sent_phys = 8;             // sender's physical (skewed) clock at send time
+}
+
+message TimeRequest { string requester = 1; }
+message TimeReply {
+  string node_id = 1;
+  double time = 2;                  // node's physical clock, seconds since epoch
+}
+
+message CommandRequest {
+  string name = 1;
+  string args = 2;                  // JSON
+}
+message JsonReply {
+  bool ok = 1;
+  string data = 2;                  // JSON
+  string error = 3;
+}
+
+message Invocation {
+  string object_id = 1;
+  string method = 2;
+  string args = 3;                  // JSON (marshalled parameters)
+  string caller = 4;
+}
+message InvocationResult {
+  bool ok = 1;
+  string result = 2;                // JSON (marshalled return value)
+  string error = 3;
+  string executed_on = 4;
+}
+
+message Chunk {
+  string chunk_id = 1;
+  bytes data = 2;
+  string sha256 = 3;
+  string node_id = 4;
+}
+message ChunkRef { string chunk_id = 1; }

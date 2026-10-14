@@ -19,6 +19,7 @@ from .coordinator import AllNodesUnavailable, Coordinator
 from .models.schemas import EventIn, IncidentCreate, IncidentStatusPatch
 from .rpc.client import NodeUnavailable, StubPool
 from .services.fault_tolerance import HealthMonitor
+from .fa2.gateway import api as fa2_api
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [gateway] %(message)s", datefmt="%H:%M:%S")
 
@@ -48,13 +49,17 @@ async def lifespan(app):
     monitor.start()
     await coordinator.start()
     asyncio.create_task(snapshot_stream())
+    await fa2_api.start(broker, monitor, coordinator)   # FA-2 services (Unit III / IV)
     logging.info("gateway ready on http://localhost:%d", config.GATEWAY_PORT)
     yield
+    fa2_api.stop()
     await pool.close()
 
 
 app = FastAPI(title="Distributed Traffic Incident Coordination System", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=config.FRONTEND_DIR), name="static")
+app.include_router(fa2_api.router)             # FA-2: /api/fa2/...
+app.include_router(fa2_api.internal)           # FA-2: /internal/fa2/... (used by the nodes)
 
 
 def check_node(node_id):
