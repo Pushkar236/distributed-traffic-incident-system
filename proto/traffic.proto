@@ -1,12 +1,3 @@
-// Distributed Traffic Incident Coordination System - gRPC contract
-//
-// Every regional traffic node (Pune / Mumbai / Nashik) exposes this service.
-// It is used by
-//   * the Coordination Middleware  (coordinator -> node RPC)
-//   * other nodes                  (node -> node, peer-to-peer RPC)
-//
-// Regenerate the Python stubs with:  python tools/gen_proto.py
-
 syntax = "proto3";
 
 package traffic;
