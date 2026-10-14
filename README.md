@@ -248,6 +248,9 @@ Full table: [`docs/CONCEPT_MAPPING.md`](docs/CONCEPT_MAPPING.md).
 
 ## 14. FA-2 future scope (not implemented)
 
+> **Update:** mutual exclusion, clock synchronization, logical clocks and election are now implemented
+> by the FA-2 extension — see [section 16](#16-fa-2-extension--unit-iii-synchronization--unit-iv-emerging-paradigms).
+
 Mutual exclusion for network-wide unit reservation · clock synchronization (Lamport/vector) for
 cross-node event ordering · election algorithm for a dynamic coordinator · replication & recovery of
 node data · distributed consistency of incident copies.
@@ -258,3 +261,54 @@ node data · distributed consistency of incident copies.
 `python tools/build_ppt.py`; screenshots in `docs/screenshots/` are real captures made with
 `python tools/capture_screenshots.py` against the running system. Team names, roll numbers and the
 college name are placeholders on slide 1 — fill them in.
+
+## 16. FA-2 extension — Unit III (Synchronization) & Unit IV (Emerging Paradigms)
+
+FA-2 extends this system in place: the same three node processes and gateway, plus a second gRPC service
+(`SyncNode`, `proto/fa2_sync.proto`) on each node port. FA-1 code, APIs and UI are unchanged
+(additive hooks only — see [`docs/FA2_CHANGELOG.md`](docs/FA2_CHANGELOG.md)).
+
+| Unit III — Synchronization | Unit IV — Emerging paradigms |
+|---|---|
+| Cristian (+NTP offset/delay) and Berkeley clock sync of skewed node clocks | Distributed objects: references, proxy, skeleton, naming service |
+| Lamport and vector clocks on every FA-2 message; merged event log with clock-condition check | Distributed web-based system: ETag / 304 HTTP caching |
+| Causal broadcast (Birman–Schiper–Stephenson) of incident events | Distributed file system: chunks × 2 replicas, checksums, failover, repair |
+| Chandy–Lamport global snapshot | Serverless: local FaaS with cold/warm starts, scale to zero, event triggers |
+| Bully + Ring election (auto re-election on leader failure) | Blockchain/DLT (self-study): hash-chained, majority-committed audit ledger |
+| Mutual exclusion: Lamport, Ricart–Agrawala, **Lodha–Kshemkalyani** (self-study) | Case studies: Megaport, Cloudflare, AWS, Hadoop, Kubernetes (documentation) |
+| Beacon protocol (liveness + offset estimation) | |
+| Deadlock detection per **Knapp's classes** (self-study): edge-chasing + global state | |
+
+**Run and demonstrate**
+
+```bash
+python run.py                    # same launcher as FA-1
+# open http://localhost:8000 and click "FA-2 ↓" in the header
+python tools/test_system.py      # FA-1 regression (40 assertions)
+python tools/test_fa2.py         # FA-2 (69 assertions, includes leader failure / recovery)
+```
+
+FA-2 API: `http://localhost:8000/docs` → tag *FA-2* (`/api/fa2/state`, `/api/fa2/election`, `/api/fa2/mutex/run`,
+`/api/fa2/snapshot`, `/api/fa2/deadlock/*`, `/api/fa2/dfs/*`, `/api/fa2/objects/*`, `/api/fa2/faas/*`,
+`/api/fa2/ledger/*`, `/api/fa2/web/feed`, …).
+
+**New files**
+
+```
+backend/fa2/                 node side: runtime, transport, clocks, clock_sync, causal, beacon, election,
+                             mutex, snapshot, deadlock, objects, dfs_store, ledger
+backend/fa2/gateway/         gateway side: api (REST), dfs_master, naming, faas (+ faas_functions),
+                             ledger_service, web
+backend/rpc/fa2_sync_pb2*.py generated from proto/fa2_sync.proto (python tools/gen_fa2_proto.py)
+frontend/fa2.js, fa2.css     FA-2 dashboard section
+tools/test_fa2.py            FA-2 end-to-end test
+tools/capture_fa2_screenshots.py, tools/build_fa2_ppt.py   screenshots + presentation
+docs/FA2_*.md                implementation, concept mapping, testing, viva preparation, changelog
+Distributed_Traffic_Incident_FA2.pptx
+```
+
+Runtime data created by FA-2 (git-ignored): `data/*_ledger.db`, `data/dfs/`, `data/fa2_dfs_master.json`.
+
+Documentation: [`FA2_IMPLEMENTATION.md`](docs/FA2_IMPLEMENTATION.md) ·
+[`FA2_CONCEPT_MAPPING.md`](docs/FA2_CONCEPT_MAPPING.md) · [`FA2_TESTING.md`](docs/FA2_TESTING.md) ·
+[`FA2_VIVA_PREPARATION.md`](docs/FA2_VIVA_PREPARATION.md).
